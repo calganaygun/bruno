@@ -439,6 +439,17 @@ const registerNetworkIpc = (mainWindow) => {
         collectionPath
       );
 
+      // allow bigint serialization in request
+      const requestConfig = axiosInstance.defaults;
+      requestConfig.transformRequest = [
+        (data, headers) => {
+          if (data && typeof data === 'object') {
+            return JSONbigAsStr.stringify(data);
+          }
+          return data;
+        }
+      ];
+
       let response, responseTime;
       try {
         /** @type {import('axios').AxiosResponse} */
