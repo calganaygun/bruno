@@ -12,6 +12,7 @@ const {
   hasBruExtension,
   isDirectory,
   browseDirectory,
+  browseFiles,
   createDirectory,
   searchForBruFiles,
   sanitizeDirectoryName
@@ -40,6 +41,17 @@ const registerRendererEventHandlers = (mainWindow, watcher, lastOpenedCollection
     }
   });
 
+  // browse directory for file
+  ipcMain.handle('renderer:browse-files', async (event, pathname, request, filters) => {
+    try {
+      const filePaths = await browseFiles(mainWindow, filters);
+
+      return filePaths;
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  });
+
   // create collection
   ipcMain.handle(
     'renderer:create-collection',
@@ -60,13 +72,14 @@ const registerRendererEventHandlers = (mainWindow, watcher, lastOpenedCollection
         const brunoConfig = {
           version: '1',
           name: collectionName,
-          type: 'collection'
+          type: 'collection',
+          ignore: ['node_modules', '.git']
         };
         const content = await stringifyJson(brunoConfig);
         await writeFile(path.join(dirPath, 'bruno.json'), content);
 
         mainWindow.webContents.send('main:collection-opened', dirPath, uid, brunoConfig);
-        ipcMain.emit('main:collection-opened', mainWindow, dirPath, uid);
+        ipcMain.emit('main:collection-opened', mainWindow, dirPath, uid, brunoConfig);
       } catch (error) {
         return Promise.reject(error);
       }
@@ -439,13 +452,14 @@ const registerRendererEventHandlers = (mainWindow, watcher, lastOpenedCollection
       const brunoConfig = {
         version: '1',
         name: collectionName,
-        type: 'collection'
+        type: 'collection',
+        ignore: ['node_modules', '.git']
       };
       const content = await stringifyJson(brunoConfig);
       await writeFile(path.join(collectionPath, 'bruno.json'), content);
 
       mainWindow.webContents.send('main:collection-opened', collectionPath, uid, brunoConfig);
-      ipcMain.emit('main:collection-opened', mainWindow, collectionPath, uid);
+      ipcMain.emit('main:collection-opened', mainWindow, collectionPath, uid, brunoConfig);
 
       lastOpenedCollections.add(collectionPath);
 
@@ -602,8 +616,8 @@ const registerMainEventHandlers = (mainWindow, watcher, lastOpenedCollections) =
     shell.openExternal(docsURL);
   });
 
-  ipcMain.on('main:collection-opened', (win, pathname, uid) => {
-    watcher.addWatcher(win, pathname, uid);
+  ipcMain.on('main:collection-opened', (win, pathname, uid, brunoConfig) => {
+    watcher.addWatcher(win, pathname, uid, brunoConfig);
     lastOpenedCollections.add(pathname);
   });
 

@@ -4,6 +4,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
+# Assign permissions for unit tests to be reported.
+# See https://github.com/dorny/test-reporter/issues/168
+permissions:
+  statuses: write
+  checks: write
+  contents: write
+  pull-requests: write
+  actions: write
+
 jobs:
   unit-test:
     name: Unit Tests
@@ -16,6 +26,14 @@ jobs:
           node-version-file: '.nvmrc'
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      # build libraries
+      - name: Build libraries
+        run: |
+          npm run build --workspace=packages/bruno-common
+          npm run build --workspace=packages/bruno-query
+
+      # test
       - name: Test Package bruno-query
         run: npm run test --workspace=packages/bruno-query
       - name: Test Package bruno-lang
@@ -24,13 +42,8 @@ jobs:
         run: npm run test --workspace=packages/bruno-schema
       - name: Test Package bruno-app
         run: npm run test --workspace=packages/bruno-app
-
-      # bruno-js needs bruno-query to be built first
-      - name: Build Package bruno-query
-        run: npm run build --workspace=packages/bruno-query
       - name: Test Package bruno-js
         run: npm run test --workspace=packages/bruno-js
-
       - name: Test Package bruno-common
         run: npm run test --workspace=packages/bruno-common
       - name: Test Package bruno-cli
@@ -58,6 +71,7 @@ jobs:
       - name: Run tests
         run: |
           cd packages/bruno-tests/collection
+          npm install
           node ../../bruno-cli/bin/bru.js run --env Prod --output junit.xml --format junit
 
       - name: Publish Test Report
