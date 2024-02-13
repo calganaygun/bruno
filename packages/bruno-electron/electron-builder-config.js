@@ -1,8 +1,8 @@
 require('dotenv').config({ path: process.env.DOTENV_PATH });
 
 const config = {
-  appId: 'com.usebruno.app',
-  productName: 'Bruno',
+  appId: 'com.usebruno.app.cakil',
+  productName: 'Cakil',
   electronVersion: '21.1.1',
   directories: {
     buildResources: 'resources',
@@ -32,13 +32,24 @@ const config = {
   linux: {
     artifactName: '${name}_${version}_${arch}_linux.${ext}',
     icon: 'resources/icons/png',
-    target: ['AppImage', 'deb', 'snap', 'rpm']
+    target: ['AppImage', 'deb', 'rpm', 'snap', 'tar.gz']
   },
   win: {
     artifactName: '${name}_${version}_${arch}_win.${ext}',
     icon: 'resources/icons/png',
-    certificateFile: `${process.env.WIN_CERT_FILEPATH}`,
-    certificatePassword: `${process.env.WIN_CERT_PASSWORD}`
+    // target x64
+    target: [
+      {
+        target: 'nsis',
+        arch: ['x64']
+      },
+      {
+        target: 'zip',
+        arch: ['x64']
+      }
+    ],
+    //certificateFile: `${process.env.WIN_CERT_FILEPATH}`,
+    //certificatePassword: `${process.env.WIN_CERT_PASSWORD}`
   }
 };
 

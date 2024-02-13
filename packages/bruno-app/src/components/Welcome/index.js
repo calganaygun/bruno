@@ -53,7 +53,7 @@ const Welcome = () => {
       <div className="">
         <Bruno width={50} />
       </div>
-      <div className="text-xl font-semibold select-none">bruno</div>
+      <div className="text-xl font-semibold select-none">çakıl</div>
       <div className="mt-4">Opensource IDE for exploring and testing APIs</div>
 
       <div className="uppercase font-semibold heading mt-10">Collections</div>
