@@ -9,7 +9,7 @@ const Mustache = require('mustache');
 const contentDispositionParser = require('content-disposition');
 const mime = require('mime-types');
 const { ipcMain } = require('electron');
-const { isUndefined, isNull, each, get, compact } = require('lodash');
+const { isUndefined, isNull, each, get, compact, cloneDeep } = require('lodash');
 const { VarsRuntime, AssertRuntime, ScriptRuntime, TestRuntime } = require('@usebruno/js');
 const prepareRequest = require('./prepare-request');
 const prepareGqlIntrospectionRequest = require('./prepare-gql-introspection-request');
@@ -29,6 +29,8 @@ const { addDigestInterceptor } = require('./digestauth-helper');
 const { shouldUseProxy, PatchedHttpsProxyAgent } = require('../../utils/proxy-util');
 const { chooseFileToSave, writeBinaryFile } = require('../../utils/filesystem');
 const { getCookieStringForUrl, addCookieToJar, getDomainsWithCookies } = require('../../utils/cookies');
+const { resolveOAuth2AuthorizationCodecessToken } = require('./oauth2-authorization-code-helper');
+
 const JSONbig = require('json-bigint');
 const JSONbigAsStr = JSONbig({ useNativeBigInt: true });
 // override the default escape function to prevent escaping
@@ -189,6 +191,16 @@ const configureRequest = async (
   }
 
   const axiosInstance = makeAxiosInstance();
+
+  if (request.oauth2) {
+    if (request?.oauth2?.grantType == 'authorization_code') {
+      let requestCopy = cloneDeep(request);
+      interpolateVars(requestCopy, envVars, collectionVariables, processEnvVars);
+      const { data, url } = await resolveOAuth2AuthorizationCodecessToken(requestCopy);
+      request.data = data;
+      request.url = url;
+    }
+  }
 
   if (request.awsv4config) {
     request.awsv4config = await resolveAwsV4Credentials(request);
@@ -401,9 +413,9 @@ const registerNetworkIpc = (mainWindow) => {
     const scriptingConfig = get(brunoConfig, 'scripts', {});
 
     try {
-      const cancelToken = axios.CancelToken.source();
-      request.cancelToken = cancelToken.token;
-      saveCancelToken(cancelTokenUid, cancelToken);
+      const controller = new AbortController();
+      request.signal = controller.signal;
+      saveCancelToken(cancelTokenUid, controller);
 
       await runPreRequest(
         request,
@@ -496,7 +508,6 @@ const registerNetworkIpc = (mainWindow) => {
           setCookieHeaders = Array.isArray(response.headers['set-cookie'])
             ? response.headers['set-cookie']
             : [response.headers['set-cookie']];
-
           for (let setCookieHeader of setCookieHeaders) {
             if (typeof setCookieHeader === 'string' && setCookieHeader.length) {
               addCookieToJar(setCookieHeader, request.url);
@@ -507,6 +518,7 @@ const registerNetworkIpc = (mainWindow) => {
 
       // send domain cookies to renderer
       const domainsWithCookies = await getDomainsWithCookies();
+
       mainWindow.webContents.send('main:cookies-update', safeParseJSON(safeStringifyJSON(domainsWithCookies)));
 
       await runPostResponse(
@@ -598,7 +610,7 @@ const registerNetworkIpc = (mainWindow) => {
   ipcMain.handle('cancel-http-request', async (event, cancelTokenUid) => {
     return new Promise((resolve, reject) => {
       if (cancelTokenUid && cancelTokens[cancelTokenUid]) {
-        cancelTokens[cancelTokenUid].cancel();
+        cancelTokens[cancelTokenUid].abort();
         deleteCancelToken(cancelTokenUid);
         resolve();
       } else {
@@ -691,9 +703,13 @@ const registerNetworkIpc = (mainWindow) => {
       const collectionUid = collection.uid;
       const collectionPath = collection.pathname;
       const folderUid = folder ? folder.uid : null;
+      const cancelTokenUid = uuid();
       const brunoConfig = getBrunoConfig(collectionUid);
       const scriptingConfig = get(brunoConfig, 'scripts', {});
       const collectionRoot = get(collection, 'root', {});
+
+      const abortController = new AbortController();
+      saveCancelToken(cancelTokenUid, abortController);
 
       if (!folder) {
         folder = collection;
@@ -703,7 +719,8 @@ const registerNetworkIpc = (mainWindow) => {
         type: 'testrun-started',
         isRecursive: recursive,
         collectionUid,
-        folderUid
+        folderUid,
+        cancelTokenUid
       });
 
       try {
@@ -729,6 +746,13 @@ const registerNetworkIpc = (mainWindow) => {
         let currentRequestIndex = 0;
         let nJumps = 0; // count the number of jumps to avoid infinite loops
         while (currentRequestIndex < folderRequests.length) {
+          // user requested to cancel runner
+          if (abortController.signal.aborted) {
+            let error = new Error('Runner execution cancelled');
+            error.isCancel = true;
+            throw error;
+          }
+
           const item = folderRequests[currentRequestIndex];
           let nextRequestName;
           const itemUid = item.uid;
@@ -782,6 +806,7 @@ const registerNetworkIpc = (mainWindow) => {
               ...eventData
             });
 
+            request.signal = abortController.signal;
             const axiosInstance = await configureRequest(
               collectionUid,
               request,
@@ -815,7 +840,7 @@ const registerNetworkIpc = (mainWindow) => {
                 ...eventData
               });
             } catch (error) {
-              if (error?.response) {
+              if (error?.response && !axios.isCancel(error)) {
                 const { data, dataBuffer } = parseDataFromResponse(error.response);
                 error.response.data = data;
 
@@ -940,15 +965,19 @@ const registerNetworkIpc = (mainWindow) => {
           }
         }
 
+        deleteCancelToken(cancelTokenUid);
         mainWindow.webContents.send('main:run-folder-event', {
           type: 'testrun-ended',
           collectionUid,
           folderUid
         });
       } catch (error) {
+        deleteCancelToken(cancelTokenUid);
         mainWindow.webContents.send('main:run-folder-event', {
-          type: 'error',
-          error
+          type: 'testrun-ended',
+          collectionUid,
+          folderUid,
+          error: error && !error.isCancel ? error : null
         });
       }
     }

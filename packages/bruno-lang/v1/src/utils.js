@@ -1,4 +1,4 @@
-const JSONbig = require('json-bigint')
+const JSONbig = require('json-bigint');
 // safely parse json
 const safeParseJson = (json) => {
   try {
@@ -10,7 +10,7 @@ const safeParseJson = (json) => {
 
 const indentString = (str) => {
   if (!str || !str.length) {
-    return str;
+    return str || '';
   }
 
   return str
@@ -21,7 +21,7 @@ const indentString = (str) => {
 
 const outdentString = (str) => {
   if (!str || !str.length) {
-    return str;
+    return str || '';
   }
 
   return str

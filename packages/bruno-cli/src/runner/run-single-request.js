@@ -15,6 +15,7 @@ const https = require('https');
 const { HttpProxyAgent } = require('http-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { makeAxiosInstance } = require('../utils/axios-instance');
+const { addAwsV4Interceptor, resolveAwsV4Credentials } = require('./awsv4auth-helper');
 const { shouldUseProxy, PatchedHttpsProxyAgent } = require('../utils/proxy-util');
 
 const protocolRegex = /^([-+\w]{1,25})(:?\/\/|:)/;
@@ -40,10 +41,13 @@ const runSingleRequest = async function (
     // make axios work in node using form data
     // reference: https://github.com/axios/axios/issues/1006#issuecomment-320165427
     if (request.headers && request.headers['content-type'] === 'multipart/form-data') {
-      // TODO: Add support for file uploads
       const form = new FormData();
       forOwn(request.data, (value, key) => {
-        form.append(key, value);
+        if (value instanceof Array) {
+          each(value, (v) => form.append(key, v));
+        } else {
+          form.append(key, value);
+        }
       });
       extend(request.headers, form.getHeaders());
       request.data = form;
@@ -186,6 +190,24 @@ const runSingleRequest = async function (
     try {
       // run request
       const axiosInstance = makeAxiosInstance();
+
+      if (request.awsv4config) {
+        // todo: make this happen in prepare-request.js
+        // interpolate the aws v4 config
+        request.awsv4config.accessKeyId = interpolateString(request.awsv4config.accessKeyId, interpolationOptions);
+        request.awsv4config.secretAccessKey = interpolateString(
+          request.awsv4config.secretAccessKey,
+          interpolationOptions
+        );
+        request.awsv4config.sessionToken = interpolateString(request.awsv4config.sessionToken, interpolationOptions);
+        request.awsv4config.service = interpolateString(request.awsv4config.service, interpolationOptions);
+        request.awsv4config.region = interpolateString(request.awsv4config.region, interpolationOptions);
+        request.awsv4config.profileName = interpolateString(request.awsv4config.profileName, interpolationOptions);
+
+        request.awsv4config = await resolveAwsV4Credentials(request);
+        addAwsV4Interceptor(axiosInstance, request);
+        delete request.awsv4config;
+      }
 
       /** @type {import('axios').AxiosResponse} */
       response = await axiosInstance(request);

@@ -402,6 +402,10 @@ export const collectionsSlice = createSlice({
               item.draft.request.auth.mode = 'digest';
               item.draft.request.auth.digest = action.payload.content;
               break;
+            case 'oauth2':
+              item.draft.request.auth.mode = 'oauth2';
+              item.draft.request.auth.oauth2 = action.payload.content;
+              break;
           }
         }
       }
@@ -1290,7 +1294,7 @@ export const collectionsSlice = createSlice({
       }
     },
     runFolderEvent: (state, action) => {
-      const { collectionUid, folderUid, itemUid, type, isRecursive, error } = action.payload;
+      const { collectionUid, folderUid, itemUid, type, isRecursive, error, cancelTokenUid } = action.payload;
       const collection = findCollectionByUid(state.collections, collectionUid);
 
       if (collection) {
@@ -1306,6 +1310,7 @@ export const collectionsSlice = createSlice({
           info.collectionUid = collectionUid;
           info.folderUid = folderUid;
           info.isRecursive = isRecursive;
+          info.cancelTokenUid = cancelTokenUid;
           info.status = 'started';
         }
 
