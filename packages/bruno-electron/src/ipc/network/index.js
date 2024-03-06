@@ -457,7 +457,8 @@ const registerNetworkIpc = (mainWindow) => {
       const requestConfig = axiosInstance.defaults;
       requestConfig.transformRequest = [
         (data, headers) => {
-          if (data && typeof data === 'object') {
+          // if data is json and not formdata, stringify it
+          if (data && typeof data === 'object' && !data.constructor.name.includes('FormData')) {
             return JSONbigAsStr.stringify(data);
           }
           return data;
