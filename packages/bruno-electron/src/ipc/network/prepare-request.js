@@ -1,10 +1,20 @@
+const { interpolate } = require('@usebruno/common');
 const { get, each, filter, extend } = require('lodash');
 const decomment = require('decomment');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 
-const parseFormData = (datas, collectionPath) => {
+const parseFormData = (datas, collectionPath, envVars, collectionVariables, processEnvVars) => {
+  const combinedVars = {
+    ...envVars,
+    ...collectionVariables,
+    process: {
+      env: {
+        ...processEnvVars
+      }
+    }
+  };
   // make axios work in node using form data
   // reference: https://github.com/axios/axios/issues/1006#issuecomment-320165427
   const form = new FormData();
@@ -23,7 +33,10 @@ const parseFormData = (datas, collectionPath) => {
         form.append(name, fs.createReadStream(trimmedFilePath), path.basename(trimmedFilePath));
       });
     } else {
-      form.append(name, value);
+      // if the value is a variable, interpolate it
+      const interpolatedValue = interpolate(value, combinedVars);
+      console.log('interpolatedValue', interpolatedValue);
+      form.append(name, interpolatedValue);
     }
   });
   return form;
@@ -160,7 +173,7 @@ const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
   return axiosRequest;
 };
 
-const prepareRequest = (request, collectionRoot, collectionPath) => {
+const prepareRequest = (request, collectionRoot, collectionPath, envVars, collectionVariables, processEnvVars) => {
   const headers = {};
   let contentTypeDefined = false;
   let url = request.url;
@@ -237,7 +250,7 @@ const prepareRequest = (request, collectionRoot, collectionPath) => {
 
   if (request.body.mode === 'multipartForm') {
     const enabledParams = filter(request.body.multipartForm, (p) => p.enabled);
-    const form = parseFormData(enabledParams, collectionPath);
+    const form = parseFormData(enabledParams, collectionPath, envVars, collectionVariables, processEnvVars);
     extend(axiosRequest.headers, form.getHeaders());
     axiosRequest.data = form;
   }
