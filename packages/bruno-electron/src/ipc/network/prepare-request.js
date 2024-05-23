@@ -1,6 +1,7 @@
 const { interpolate } = require('@usebruno/common');
 const { get, each, filter, extend } = require('lodash');
 const decomment = require('decomment');
+var JSONbig = require('json-bigint');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
@@ -50,7 +51,7 @@ const JSONbigAsStr = JSONbig({ useNativeBigInt: true });
 // We will provide support for disabling the auth via scripting in the future
 const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
   const collectionAuth = get(collectionRoot, 'request.auth');
-  if (collectionAuth && ['inherit', 'none'].includes(request.auth.mode)) {
+  if (collectionAuth && request.auth.mode === 'inherit') {
     switch (collectionAuth.mode) {
       case 'awsv4':
         axiosRequest.awsv4config = {
@@ -69,43 +70,13 @@ const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
         };
         break;
       case 'bearer':
-        axiosRequest.headers['authorization'] = `Bearer ${get(collectionAuth, 'bearer.token')}`;
+        axiosRequest.headers['Authorization'] = `Bearer ${get(collectionAuth, 'bearer.token')}`;
         break;
       case 'digest':
         axiosRequest.digestConfig = {
           username: get(collectionAuth, 'digest.username'),
           password: get(collectionAuth, 'digest.password')
         };
-        break;
-      case 'oauth2':
-        const grantType = get(collectionAuth, 'auth.oauth2.grantType');
-        switch (grantType) {
-          case 'password':
-            axiosRequest.oauth2 = {
-              grantType: grantType,
-              username: get(collectionAuth, 'auth.oauth2.username'),
-              password: get(collectionAuth, 'auth.oauth2.password')
-            };
-            break;
-          case 'authorization_code':
-            axiosRequest.oauth2 = {
-              grantType: grantType,
-              callbackUrl: get(collectionAuth, 'auth.oauth2.callbackUrl'),
-              authorizationUrl: get(collectionAuth, 'auth.oauth2.authorizationUrl'),
-              accessTokenUrl: get(collectionAuth, 'auth.oauth2.accessTokenUrl'),
-              clientId: get(collectionAuth, 'auth.oauth2.clientId'),
-              clientSecret: get(collectionAuth, 'auth.oauth2.clientSecret'),
-              scope: get(collectionAuth, 'auth.oauth2.scope')
-            };
-            break;
-          case 'client_credentials':
-            axiosRequest.oauth2 = {
-              grantType: grantType,
-              clientId: get(collectionAuth, 'auth.oauth2.clientId'),
-              clientSecret: get(collectionAuth, 'auth.oauth2.clientSecret')
-            };
-            break;
-        }
         break;
     }
   }
@@ -129,7 +100,7 @@ const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
         };
         break;
       case 'bearer':
-        axiosRequest.headers['authorization'] = `Bearer ${get(request, 'auth.bearer.token')}`;
+        axiosRequest.headers['Authorization'] = `Bearer ${get(request, 'auth.bearer.token')}`;
         break;
       case 'digest':
         axiosRequest.digestConfig = {
@@ -143,8 +114,12 @@ const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
           case 'password':
             axiosRequest.oauth2 = {
               grantType: grantType,
+              accessTokenUrl: get(request, 'auth.oauth2.accessTokenUrl'),
               username: get(request, 'auth.oauth2.username'),
-              password: get(request, 'auth.oauth2.password')
+              password: get(request, 'auth.oauth2.password'),
+              clientId: get(request, 'auth.oauth2.clientId'),
+              clientSecret: get(request, 'auth.oauth2.clientSecret'),
+              scope: get(request, 'auth.oauth2.scope')
             };
             break;
           case 'authorization_code':
@@ -155,14 +130,17 @@ const setAuthHeaders = (axiosRequest, request, collectionRoot) => {
               accessTokenUrl: get(request, 'auth.oauth2.accessTokenUrl'),
               clientId: get(request, 'auth.oauth2.clientId'),
               clientSecret: get(request, 'auth.oauth2.clientSecret'),
-              scope: get(request, 'auth.oauth2.scope')
+              scope: get(request, 'auth.oauth2.scope'),
+              pkce: get(request, 'auth.oauth2.pkce')
             };
             break;
           case 'client_credentials':
             axiosRequest.oauth2 = {
               grantType: grantType,
+              accessTokenUrl: get(request, 'auth.oauth2.accessTokenUrl'),
               clientId: get(request, 'auth.oauth2.clientId'),
-              clientSecret: get(request, 'auth.oauth2.clientSecret')
+              clientSecret: get(request, 'auth.oauth2.clientSecret'),
+              scope: get(request, 'auth.oauth2.scope')
             };
             break;
         }
@@ -180,7 +158,7 @@ const prepareRequest = (request, collectionRoot, collectionPath, envVars, collec
 
   // collection headers
   each(get(collectionRoot, 'request.headers', []), (h) => {
-    if (h.enabled) {
+    if (h.enabled && h.name.length > 0) {
       headers[h.name] = h.value;
       if (h.name.toLowerCase() === 'content-type') {
         contentTypeDefined = true;
@@ -189,7 +167,7 @@ const prepareRequest = (request, collectionRoot, collectionPath, envVars, collec
   });
 
   each(request.headers, (h) => {
-    if (h.enabled) {
+    if (h.enabled && h.name.length > 0) {
       headers[h.name] = h.value;
       if (h.name.toLowerCase() === 'content-type') {
         contentTypeDefined = true;

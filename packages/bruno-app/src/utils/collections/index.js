@@ -417,7 +417,10 @@ export const transformRequestToSaveToFilesystem = (item) => {
   });
 
   if (itemToSave.request.body.mode === 'json') {
-    itemToSave.request.body.json = replaceTabsWithSpaces(itemToSave.request.body.json);
+    itemToSave.request.body = {
+      ...itemToSave.request.body,
+      json: replaceTabsWithSpaces(itemToSave.request.body.json)
+    };
   }
 
   return itemToSave;
@@ -522,7 +525,7 @@ export const humanizeGrantType = (mode) => {
   let label = 'No Auth';
   switch (mode) {
     case 'password': {
-      label = 'Resource Owner Password Credentials';
+      label = 'Password Credentials';
       break;
     }
     case 'authorization_code': {
@@ -638,4 +641,15 @@ export const getAllVariables = (collection) => {
       }
     }
   };
+};
+
+export const maskInputValue = (value) => {
+  if (!value || typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .split('')
+    .map(() => '*')
+    .join('');
 };
