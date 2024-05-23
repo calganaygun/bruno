@@ -1,7 +1,6 @@
 const { interpolate } = require('@usebruno/common');
 const { get, each, filter, extend } = require('lodash');
 const decomment = require('decomment');
-var JSONbig = require('json-bigint');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');

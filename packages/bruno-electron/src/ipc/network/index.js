@@ -494,15 +494,6 @@ const registerNetworkIpc = (mainWindow) => {
         cancelTokenUid
       });
 
-      const axiosInstance = await configureRequest(
-        collectionUid,
-        request,
-        envVars,
-        collectionVariables,
-        processEnvVars,
-        collectionPath
-      );
-
       // allow bigint serialization in request
       const requestConfig = axiosInstance.defaults;
       requestConfig.transformRequest = [
